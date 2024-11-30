@@ -17,10 +17,13 @@ const getTokens = () => {
     return fs.readFileSync('token.txt', 'utf8').split('\n').map(line => line.trim()).filter(Boolean);
 };
 
-const shareBandwidth = async (token, proxy) => {
+const shareBandwidth = async (token, proxy, proxies, index) => {
     try {
-        const quality = getRandomQuality(); 
+        const quality = getRandomQuality();
         const proxyAgent = new HttpsProxyAgent(proxy);
+
+        // Log only the index (serial number) of the token being processed
+        // logger(`Starting bandwidth share for token #${chalk.green(index + 1)} with proxy: ${chalk.cyan(proxy)}`, 'debug');
 
         const response = await fetch('https://api.openloop.so/bandwidth/share', {
             method: 'POST',
@@ -41,34 +44,40 @@ const shareBandwidth = async (token, proxy) => {
         const logBandwidthShareResponse = (response) => {
             if (response && response.data && response.data.balances) {
                 const balance = response.data.balances.POINT;
-                logger(`Bandwidth shared Message: ${chalk.yellow(response.message)} | Score: ${chalk.yellow(quality)} | Total Earnings: ${chalk.yellow(balance)}`);
+                logger(`Token #${chalk.green(index + 1)} - ${chalk.yellow(response.message)} | Score: ${chalk.yellow(quality)} | Total Earnings: ${chalk.yellow(balance)}`, 'info');
             }
         };
 
         logBandwidthShareResponse(data);
     } catch (error) {
-        logger('Error sharing bandwidth:', 'error', error.message);
+        logger(`Error sharing bandwidth for token #${chalk.green(index + 1)} with proxy: ${chalk.cyan(proxy)}`, 'error', error.message);
+        
+        // If proxy fails, remove it from the list
+        const index = proxies.indexOf(proxy);
+        if (index > -1) {
+            proxies.splice(index, 1); // Remove the failed proxy
+        }
     }
 };
 
 const shareBandwidthForAllTokens = async () => {
-    const tokens = getTokens();
-    const proxies = getProxies();
+    let tokens = getTokens();
+    let proxies = getProxies();
 
-    if (tokens.length !== proxies.length) {
-        logger('The number of tokens and proxies do not match!', 'error');
-        return;
-    }
+    // Shuffle proxies to randomize the pairing
+    let shuffledProxies = proxies.sort(() => Math.random() - 0.5);
 
-    for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-        const proxy = proxies[i];
+    // Use Promise.all to run tasks concurrently
+    const tasks = tokens.map((token, index) => {
+        const proxy = shuffledProxies[index % shuffledProxies.length]; // Reuse proxies if more tokens than proxies
+        return shareBandwidth(token, proxy, shuffledProxies, index);
+    });
 
-        try {
-            await shareBandwidth(token, proxy);
-        } catch (error) {
-            logger(`Error processing token: ${token}, Error: ${error.message}`, 'error');
-        }
+    try {
+        // Wait for all promises to resolve
+        await Promise.all(tasks);
+    } catch (error) {
+        logger('Error in sharing bandwidth for some tokens!', 'error', error.message);
     }
 };
 
