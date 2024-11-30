@@ -4,13 +4,23 @@ import fetch from 'node-fetch';
 import readline from 'readline';
 import fs from 'fs';
 
+// Membaca konfigurasi dari file config.json
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+
 const rl = readline.createInterface({
     input: process.stdin,
-    output: process.stdout
+    output: process.stdout,
 });
 
 const askQuestion = (query) => {
     return new Promise((resolve) => rl.question(query, resolve));
+};
+
+// Fungsi untuk auto-generate email dengan domain dari config.json
+const generateEmail = () => {
+    const randomDomain = config.domains[Math.floor(Math.random() * config.domains.length)];
+    const randomString = Math.random().toString(36).substring(2, 12); // 10 karakter random
+    return `${randomString}${randomDomain}`;
 };
 
 const loginUser = async (email, password) => {
@@ -31,8 +41,8 @@ const loginUser = async (email, password) => {
         const loginData = await loginResponse.json();
         const accessToken = loginData.data.accessToken;
         logger('Login successful get Token:', 'success', accessToken);
-        
-        fs.writeFileSync('token.txt', accessToken + '\n', 'utf8');
+
+        fs.appendFileSync('token.txt', accessToken + '\n', 'utf8');
         logger('Access token saved to token.txt');
     } catch (error) {
         logger('Error during login:', 'error', error.message);
@@ -41,12 +51,19 @@ const loginUser = async (email, password) => {
 
 const registerUser = async () => {
     try {
-        const email = await askQuestion('Enter your email: ');
-        const name = email;
-        const password = await askQuestion('Enter your password: ');
-        const inviteCode = 'ol41fe134b'; 
+        const generatedEmail = generateEmail(); // Auto-generate email
+        logger(`Generated email: ${generatedEmail}`, 'info');
 
-        const registrationPayload = { name, username: email, password, inviteCode };
+        const password = config.password || await askQuestion('Enter your password: '); // Menggunakan password dari config
+        const inviteCode = config.inviteCode || await askQuestion('Enter your invite code: '); // Menggunakan inviteCode dari config
+
+        const registrationPayload = {
+            name: generatedEmail,
+            username: generatedEmail,
+            password,
+            inviteCode,
+        };
+
         const registerResponse = await fetch('https://api.openloop.so/users/register', {
             method: 'POST',
             headers: {
@@ -56,8 +73,8 @@ const registerUser = async () => {
         });
 
         if (registerResponse.status === 401) {
-            logger('Email already exist. Attempting to login...');
-            await loginUser(email, password);
+            logger('Email already exists. Attempting to login...');
+            await loginUser(generatedEmail, password);
             return;
         }
 
@@ -66,14 +83,35 @@ const registerUser = async () => {
         }
 
         const registerData = await registerResponse.json();
-        logger('Registration successful:','success', registerData.message);
+        logger('Registration successful:', 'success', registerData.message);
 
-        await loginUser(email, password);
+        await loginUser(generatedEmail, password);
     } catch (error) {
         logger('Error during registration:', 'error', error.message);
+    }
+};
+
+const main = async () => {
+    try {
+        const accountCount = parseInt(await askQuestion('How many accounts do you want to create? '), 10);
+
+        if (isNaN(accountCount) || accountCount <= 0) {
+            logger('Invalid input. Please enter a valid number.', 'error');
+            rl.close();
+            return;
+        }
+
+        for (let i = 0; i < accountCount; i++) {
+            logger(`Creating account ${i + 1} of ${accountCount}...`, 'info');
+            await registerUser();
+        }
+
+        logger('Account creation process completed!', 'success');
+    } catch (error) {
+        logger('An error occurred during the process:', 'error', error.message);
     } finally {
         rl.close();
     }
 };
 
-registerUser();
+main();
