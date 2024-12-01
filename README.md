@@ -4,7 +4,7 @@
 
 ## OpenLoop Network is a decentralized wireless network built to enhance Internet service delivery, making it more efficient, accessible, and rewarding for everyone. 🤩
 
-- Website [https://openloop.so/](https://openloop.so/) | Reff Code = olaff28ef8
+- Website [https://openloop.so/](https://openloop.so/) | Reff Code = ol9976b79b
 - Twitter [@openloop_so](https://x.com/openloop_so)
 - Telegram [@openloop_updates](https://t.me/openloop_updates)
 - discord [https://discord.com/invite/75qBRaUczN](https://discord.gg/44kUEgKf)
